@@ -12,7 +12,7 @@ def gen_operator():
 
 #Only generate between 1 and 4096 for an arbitrary reason
 def gen_const():
-	return str(int(random() * 4095 + 1))
+	return str(int(random() * 15 + 1))
 
 def gen_var():
 	return "t"
@@ -94,6 +94,21 @@ def mutate(sentence):
 	sentence[m_index] = new_m
 	return sentence
 
+def crossover(s_1 , s_2):
+	
+	print "s_1 " , s_1 , s_1[:2]
+	print "s_2 " , s_2 , s_2[2:]
+	child_1 = s_1[:2] + s_2[2:]
+	child_2 = s_2[:2] + s_1[2:]
+	return [child_1 , child_2]
+
+def add(s_1 , s_2):
+	operator = [gen_operator()]
+
+	child = ['('] + s_1 + operator + s_2 + [')']
+
+	return child
+
 #Recursively flattens a list
 def flatten(l):
 	ret = []
@@ -115,7 +130,6 @@ def gen_values(s):
 	for t in range(values_to):
 		try:
 			val = eval(s)
-			#print val , " " , 
 			values[t] = int(abs(val) % 255)
 		except ValueError:
 			values[t] = 0
@@ -124,10 +138,9 @@ def gen_values(s):
 		except OverflowError:
 			values[t] = 0
 		
-		if time() > start_time + 5:
-			return values
+		if time() > start_time + 2:
+			return [0] * values_to
 
-	#print "\n"
 	return values
 
 def check_cycles(s):
@@ -142,7 +155,8 @@ def check_cycles(s):
 		diff = map(lambda x: x * x , slices)
 		diff_sum = sum(diff)
 		if diff_sum == 0:
-			if i < 4000:
+			if i < 100:
+				print "Cycle less than 1000"
 				return 0
 			else:
 				cycles_count += 1
@@ -160,20 +174,22 @@ def mean_diff(s):
 	return mean_diff
 
 def fitness(s):
+	print "Fitness " , s
 	values = gen_values(s)
 	#print values
 
 	cycles = check_cycles(values)
-	#print cycles
+	print "Cycles " , cycles
 
 	mean_diff_sum = mean_diff(values)
-	#print mean_diff_sum
+	print "Mean Diff " , mean_diff_sum
 
 	fitness = 0
 
-	fitness += (cycles + 1)  *  (1 / 100)
+	fitness += (cycles * 1000)
 	
-	fitness += mean_diff_sum / 100
+	if mean_diff_sum > 4000 and mean_diff_sum < 2500000:
+		fitness += mean_diff_sum / 100
 
 	fitness += len(s)
 
@@ -181,12 +197,12 @@ def fitness(s):
 
 	return fitness
 
-cutoff = 5
+cutoff = 10
 def perform_cutoff(s_list):
 	top = s_list[:cutoff]
 	return top
 
-mutate_prob_to = .05
+mutate_prob_to = .01
 def perform_mutate(s_list):
 	for i in range(len(s_list)):
 		s = s_list[i][0]
@@ -198,11 +214,56 @@ def perform_mutate(s_list):
 	
 	return s_list
 
-total_s = 10
+def perform_crossover(s_list):
+	copy_s_list = s_list[:]
+	ret_s_list = []
+	while len(copy_s_list) > 0:
+		print len(copy_s_list)
+		first = choice(copy_s_list)
+		copy_s_list.remove(first)
+		second = choice(copy_s_list)
+		copy_s_list.remove(second)
+		children = crossover(first[0] , second[0])
+		
+		child_one = [children[0] , 0]
+		if child_one not in s_list:
+			print "Child not found"
+			
+			print child_one
+			print s_list
+			print "\n"
+			ret_s_list.append(child_one)
+		
+		child_two = [children[1] , 0]
+		if child_two not in s_list:
+			ret_s_list.append(child_two)
+	
+	return ret_s_list
+
+def perform_add(s_list):
+	ret_s_list = []
+	while len(s_list) > 0:
+		left = choice(s_list)
+		s_list.remove(left)
+		right = choice(s_list)
+		s_list.remove(right)
+
+		print "Left " , left[0]
+		print "Right " , right[0]
+		comb = [add(left[0] , right[0]) , 0]
+
+		print "Comb " , comb[0]
+		ret_s_list.append(comb)
+
+	return ret_s_list
+
+total_s = 30
 def perform_replace(s_list):
-	for i in range(len(s_list) , total_s):
+	while len(s_list) < total_s:
 		s = gen_sentence()
-		s_list.append([s , 0])
+		s_add = [s , 0]
+		if s_add not in s_list:
+			s_list.append(s_add)
 	
 	return s_list
 
@@ -227,10 +288,22 @@ def perform(init_s_list):
 		print "\n"
 		
 		top = perform_cutoff(sorted_s_list)
-		mutate_top = perform_mutate(top)
-		replaced = perform_replace(mutate_top)
+		print "top " , top
+		children = perform_crossover(top)
+		print "children " , children
+		#print "top " , top
+		add_children = perform_add(top)
+		print "add children " , add_children
+		#mutate_top = perform_mutate(top)
+		
+		top.extend(children)
+		top.extend(add_children)
+		print "modified " , top
+
+		replaced = perform_replace(top)
 		s_list = perform_fitness(replaced)
 
+#init_s_list = [[['(' , 't' ,  '>>' ,  '4' , ')'] , 0]]
 init_s_list = []
 init_s_list = perform_replace(init_s_list)
 print init_s_list
