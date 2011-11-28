@@ -10,9 +10,17 @@ operators = [">>" , "<<" , "+" , "-" , "*" , "/" , "^" , "%" , "&" , "|"]
 def gen_operator():
 	return choice(operators)
 
+
+small_prob_to = .9
 #Only generate between 1 and 4096 for an arbitrary reason
 def gen_const():
-	return str(int(random() * 15 + 1))
+	small_prob = random()
+	if small_prob < small_prob_to:
+		ret_val = random() * 15 + 1
+	else:
+		ret_val = random() * 4095 + 1
+
+	return str(int(ret_val))
 
 def gen_var():
 	return "t"
@@ -23,7 +31,7 @@ def gen_group():
 	#Blah blah don't use magic numbers	
 	if left_prob < .4:
 		left = [gen_group()]
-	elif left_prob > .4 and left_prob < .9:
+	elif left_prob > .4 and left_prob < .8:
 		left = [gen_var()]
 	else:
 		left = [gen_const()]
@@ -105,6 +113,12 @@ def crossover(s_1 , s_2):
 def add(s_1 , s_2):
 	operator = [gen_operator()]
 
+	if not is_const(s_1) and not is_var(s_1):
+		s_1 = [s_1]
+	
+	if not is_const(s_2) and not is_var(s_2):
+		s_2 = [s_2]
+
 	child = ['('] + s_1 + operator + s_2 + [')']
 
 	return child
@@ -122,6 +136,7 @@ def flatten(l):
 
 
 values_to = 65536
+max_time = 3
 
 def gen_values(s):
 	values = [0] * values_to
@@ -138,7 +153,7 @@ def gen_values(s):
 		except OverflowError:
 			values[t] = 0
 		
-		if time() > start_time + 2:
+		if time() > start_time + max_time:
 			return [0] * values_to
 
 	return values
@@ -279,6 +294,7 @@ def perform(init_s_list):
 	for i in range(iterations):
 		
 		sorted_s_list = sorted(s_list, key = lambda s: s[1] , reverse=True)
+		print "\n------------------------------------------------------------"
 		print "Iteration " , i
 		#print "Curr list\n" , sorted_s_list , "\n"
 		for s in sorted_s_list:
@@ -294,7 +310,7 @@ def perform(init_s_list):
 		#print "top " , top
 		add_children = perform_add(top)
 		print "add children " , add_children
-		#mutate_top = perform_mutate(top)
+		top = perform_mutate(top)
 		
 		top.extend(children)
 		top.extend(add_children)
