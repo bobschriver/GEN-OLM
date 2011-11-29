@@ -15,10 +15,11 @@ small_prob_to = .9
 #Only generate between 1 and 4096 for an arbitrary reason
 def gen_const():
 	small_prob = random()
+	#We want a larger chance of generating smaller numbers for bitshifting
 	if small_prob < small_prob_to:
 		ret_val = random() * 15 + 1
 	else:
-		ret_val = random() * 4095 + 1
+		ret_val = random() * 1023 + 1
 
 	return str(int(ret_val))
 
@@ -28,7 +29,9 @@ def gen_var():
 def gen_group():
 	left_prob = random()
 
-	#Blah blah don't use magic numbers	
+	#We put everything in lists so we can concatenate everything together
+	#Everything except groups will not be a list after concatenation
+	#Since the group is a list of lists
 	if left_prob < .4:
 		left = [gen_group()]
 	elif left_prob > .4 and left_prob < .8:
@@ -65,6 +68,7 @@ def mutate(sentence):
 	m_index = int(floor(random() * len(sentence)))
 	m = sentence[m_index]
 
+	#We don't want to mutate a parenthesis
 	while is_paren(m):
 		m_index = int(floor(random() * len(sentence)))
 		m = sentence[m_index]
@@ -102,17 +106,21 @@ def mutate(sentence):
 	sentence[m_index] = new_m
 	return sentence
 
+#Splices two parents together
 def crossover(s_1 , s_2):
-	
-	print "s_1 " , s_1 , s_1[:2]
-	print "s_2 " , s_2 , s_2[2:]
+	#Since the sentences are tree like structures,
+	#We just need to take the left branch of one and put it together
+	#With the right brancg of two, and vice versa
 	child_1 = s_1[:2] + s_2[2:]
 	child_2 = s_2[:2] + s_1[2:]
 	return [child_1 , child_2]
 
+#Concatenates to sentences
 def add(s_1 , s_2):
+	#Need to generate a new operate to put between them
 	operator = [gen_operator()]
 
+	#We need to put each group into a list to preserve the tree
 	if not is_const(s_1) and not is_var(s_1):
 		s_1 = [s_1]
 	
@@ -127,6 +135,7 @@ def add(s_1 , s_2):
 def flatten(l):
 	ret = []
 	for val in l:
+		#If its a string, we're done flattening
 		if isinstance(val , StringType):
 			ret.append(val)
 		else:
@@ -135,7 +144,8 @@ def flatten(l):
 	return ret
 
 
-values_to = 65536
+#8000 cycles per second times seconds recorded
+values_to = 8000 * 10
 max_time = 3
 
 def gen_values(s):
@@ -144,15 +154,24 @@ def gen_values(s):
  	start_time = time()
 	for t in range(values_to):
 		try:
+			#Evaluate the string
 			val = eval(s)
-			values[t] = int(abs(val) % 255)
+			#Mod with 256 to turn it into a character
+			#This is probably where the discrepency between putchar()
+			#and this implementation occurs
+			values[t] = int(abs(val) % 256)
 		except ValueError:
+			#Probably a negative shift value, ignore
 			values[t] = 0
 		except ZeroDivisionError:
+			#Dividing by zero, ignore
 			values[t] = 0
 		except OverflowError:
+			#Value is larger than a 32 bit integer
+			#We could probably do something else here
 			values[t] = 0
 		
+		#If we go over time, we want to ignore this string
 		if time() > start_time + max_time:
 			return [0] * values_to
 
@@ -160,28 +179,50 @@ def gen_values(s):
 
 def check_cycles(s):
 	cycles_count = 0
-	for i in range(1 , len(s) / 4):
+	num_cycles = 1
+
+
+	for i in range(1 , len(s)):
+
+		#This will select all values over the cycle we are looking for
 		slices = s[::i]
+
+		#We take the slices, remove the first value and put it at the end
+		#So, [1 , 2 , 3] becomes [2 , 3 , 1]
 		shift_slices = slices[:]
 		h = slices[:1]
 		del shift_slices[:1]
 		shift_slices.extend(h)
+		
+		#Essentially a zipWith with subtraction
+		#We subtract each element of one list with the element with the same index in the other
 		diff = map(int.__sub__ , slices , shift_slices)
-		diff = map(lambda x: x * x , slices)
+
+		#Take the abs of each element
+		diff = map(lambda x: abs(x) , slices)
+
+		#Take the sum
 		diff_sum = sum(diff)
+
+		#Right now we only check if each element in the list is the same
+		#ie diff is 0, however we could change this if we wanted leeway 
+		#in cycles
 		if diff_sum == 0:
-			if i < 100:
-				print "Cycle less than 1000"
-				return 0
-			else:
-				cycles_count += 1
+			#We subtract the number of cycles because a set with cycle 1 with have
+			#cycles at 2 , 3 , 4 etc, so we need to take care of sets with a large 
+			#number of cycles, and count them less
+			#We add i, because we want sets with complex cycles, ie ones with large periods
+			cycles_count += i - num_cycles
+			num_cycles += 1
 
 	return cycles_count
 
 def mean_diff(s):
 	mean = s[0]
 	mean_diff = 0
-
+	
+	#For each value, calculate the diff from the mean
+	#Then recalculate the mean
 	for i in s:
 		mean_diff = mean_diff + abs(i - mean)
 		mean = (mean + i) / 2
@@ -189,64 +230,68 @@ def mean_diff(s):
 	return mean_diff
 
 def fitness(s):
-	print "Fitness " , s
+	#Generate the values of the sentence
 	values = gen_values(s)
-	#print values
 
+	#See how many cycles we have
 	cycles = check_cycles(values)
-	print "Cycles " , cycles
 
+	#Calculate the sum of the difference from the mean
 	mean_diff_sum = mean_diff(values)
-	print "Mean Diff " , mean_diff_sum
 
-	fitness = 0
-
-	fitness += (cycles * 1000)
+	fitness = cycles
 	
-	if mean_diff_sum > 4000 and mean_diff_sum < 2500000:
-		fitness += mean_diff_sum / 100
+	#Need to scale the mean differences
+	fitness += mean_diff_sum / 100
 
-	fitness += len(s)
+	#Longer sentences tend to be more complicated
+	fitness *= len(s)
 
+	#TODO: Implement the number of values which are listenable
 	#listenable_num = listenable(values)
 
 	return fitness
 
 cutoff = 10
 def perform_cutoff(s_list):
+	#Just pick the top 10
 	top = s_list[:cutoff]
 	return top
 
 mutate_prob_to = .01
 def perform_mutate(s_list):
 	for i in range(len(s_list)):
+		#This is the actual sentence
 		s = s_list[i][0]
 
 		mutate_prob = random()
 
+		#We only mutate a small percentage of the time
 		if mutate_prob < mutate_prob_to:
 			s_list[i][0] = mutate(s)
 	
 	return s_list
 
+#Performs crossover on the list
 def perform_crossover(s_list):
+	#We need a copy of this list to remove things from
 	copy_s_list = s_list[:]
 	ret_s_list = []
 	while len(copy_s_list) > 0:
-		print len(copy_s_list)
+		
+		#Pick two random parents
 		first = choice(copy_s_list)
 		copy_s_list.remove(first)
 		second = choice(copy_s_list)
 		copy_s_list.remove(second)
+
+		#Create the pair of children from crossover
 		children = crossover(first[0] , second[0])
 		
+
+		#Add them to the list if they are not already in it
 		child_one = [children[0] , 0]
 		if child_one not in s_list:
-			print "Child not found"
-			
-			print child_one
-			print s_list
-			print "\n"
 			ret_s_list.append(child_one)
 		
 		child_two = [children[1] , 0]
@@ -255,28 +300,36 @@ def perform_crossover(s_list):
 	
 	return ret_s_list
 
+#Takes the top parents and combines them together
 def perform_add(s_list):
 	ret_s_list = []
-	while len(s_list) > 0:
-		left = choice(s_list)
-		s_list.remove(left)
-		right = choice(s_list)
-		s_list.remove(right)
+	copy_s_list = s_list[:]
+	#We'll be removing pairs of parents from s_list
+	while len(copy_s_list) > 0:
 
-		print "Left " , left[0]
-		print "Right " , right[0]
+		#Pick a random pair of parents and remove them from the list
+		left = choice(copy_s_list)
+		copy_s_list.remove(left)
+		right = choice(copy_s_list)
+		copy_s_list.remove(right)
+
+		#Combine parents and create a new fitness pair
 		comb = [add(left[0] , right[0]) , 0]
 
-		print "Comb " , comb[0]
+		#Add the fitness pair to our return value
 		ret_s_list.append(comb)
 
 	return ret_s_list
 
+
 total_s = 30
+#Generate sentences until we have the desired number (30)
 def perform_replace(s_list):
 	while len(s_list) < total_s:
 		s = gen_sentence()
+		#Create a new fitness pair
 		s_add = [s , 0]
+		#We don't want to have two of the same sentences in the list
 		if s_add not in s_list:
 			s_list.append(s_add)
 	
@@ -284,19 +337,21 @@ def perform_replace(s_list):
 
 def perform_fitness(s_list):
 	for s in s_list:
+		#The join statement flattens the tree and turns it into a string
 		s[1] = fitness(" ".join(flatten(s[0])))
 	
 	return s_list
 
-iterations = 10000
+iterations = 1000
 def perform(init_s_list):
 	s_list = init_s_list
 	for i in range(iterations):
 		
+		#Sort in descending order based on the fitness (s[1])
 		sorted_s_list = sorted(s_list, key = lambda s: s[1] , reverse=True)
+		
 		print "\n------------------------------------------------------------"
 		print "Iteration " , i
-		#print "Curr list\n" , sorted_s_list , "\n"
 		for s in sorted_s_list:
 			print "Fitness " , s[1]
 			print " ".join(flatten(s[0])) , "\n"
@@ -304,26 +359,33 @@ def perform(init_s_list):
 		print "\n"
 		
 		top = perform_cutoff(sorted_s_list)
-		print "top " , top
-		children = perform_crossover(top)
-		print "children " , children
-		#print "top " , top
-		add_children = perform_add(top)
-		print "add children " , add_children
-		top = perform_mutate(top)
-		
-		top.extend(children)
-		top.extend(add_children)
-		print "modified " , top
 
+		#Creates children by crossing top parents
+		crossover_children = perform_crossover(top)
+
+		#Creates children from combining the top parents
+		add_children = perform_add(top)
+
+		#Mutate the top performers
+		#top = perform_mutate(top)
+		
+		#Add the crossover children in
+		top.extend(crossover_children)
+		#Add the combined children in
+		top.extend(add_children)
+
+		#Fill up the list with randomly generated sentences
 		replaced = perform_replace(top)
+
+		#Calculate the fitness for all sentences
 		s_list = perform_fitness(replaced)
 
-#init_s_list = [[['(' , 't' ,  '>>' ,  '4' , ')'] , 0]]
-init_s_list = []
+#Initialize our list, possibly with known good patterns
+#Our list is a list of pairs of sentences and fitnesses
+init_s_list = [[['(' , 't' ,  '>>' ,  '4' , ')'] , 0] , [['(' , ['(' , 't' , '<<' , '7' , ')'] , '%' , ['(' , 't' , '>>' , '11' , ')'] , ')'] , 0]]
+#Fill up our list
 init_s_list = perform_replace(init_s_list)
-print init_s_list
+#Calculate our initial fitness
 init_s_list = perform_fitness(init_s_list)
-print init_s_list
-
+#Perform the genetic algorithm
 perform(init_s_list)
