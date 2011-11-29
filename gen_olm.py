@@ -276,6 +276,7 @@ def perform_mutate(s_list):
 def perform_crossover(s_list):
 	#We need a copy of this list to remove things from
 	copy_s_list = s_list[:]
+	first_s_list = [s[0] for s in s_list]
 	ret_s_list = []
 	while len(copy_s_list) > 0:
 		
@@ -291,11 +292,11 @@ def perform_crossover(s_list):
 
 		#Add them to the list if they are not already in it
 		child_one = [children[0] , 0]
-		if child_one not in s_list:
+		if child_one[0] not in first_s_list:
 			ret_s_list.append(child_one)
 		
 		child_two = [children[1] , 0]
-		if child_two not in s_list:
+		if child_two[0] not in first_s_list:
 			ret_s_list.append(child_two)
 	
 	return ret_s_list
@@ -304,6 +305,7 @@ def perform_crossover(s_list):
 def perform_add(s_list):
 	ret_s_list = []
 	copy_s_list = s_list[:]
+	first_s_list = [s[0] for s in s_list]
 	#We'll be removing pairs of parents from s_list
 	while len(copy_s_list) > 0:
 
@@ -317,7 +319,8 @@ def perform_add(s_list):
 		comb = [add(left[0] , right[0]) , 0]
 
 		#Add the fitness pair to our return value
-		ret_s_list.append(comb)
+		if comb[0] not in first_s_list:
+			ret_s_list.append(comb)
 
 	return ret_s_list
 
@@ -367,7 +370,7 @@ def perform(init_s_list):
 		add_children = perform_add(top)
 
 		#Mutate the top performers
-		#top = perform_mutate(top)
+		top = perform_mutate(top)
 		
 		#Add the crossover children in
 		top.extend(crossover_children)
